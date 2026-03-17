@@ -1,0 +1,18 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+
+# Data — PDFs and vectorstore are local only
+data/pdfs/
+data/vectorstore/
+
+# Keep output markdown and images tracked
+# (remove the lines below if you don't want them in git)
+# data/output/
+
+# OS
+.DS_Store
+Thumbs.db

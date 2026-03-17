@@ -1,0 +1,13 @@
+docling
+langchain
+langchain-core
+langchain-community
+langchain-chroma
+langchain-openai
+langchain-text-splitters
+langchain-huggingface
+chromadb
+sentence-transformers
+openai
+gradio
+python-dotenv
