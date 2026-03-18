@@ -82,22 +82,31 @@ def chunk_documents(documents: list[Document]) -> list[Document]:
     return all_chunks
 
 
+_embeddings = None
+_vectorstore = None
+
+
 def get_embeddings() -> HuggingFaceEmbeddings:
-    """Create the embedding model."""
-    return HuggingFaceEmbeddings(
-        model_name=EMBEDDING_MODEL,
-        model_kwargs={"trust_remote_code": True},
-    )
+    """Create the embedding model (cached)."""
+    global _embeddings
+    if _embeddings is None:
+        _embeddings = HuggingFaceEmbeddings(
+            model_name=EMBEDDING_MODEL,
+            model_kwargs={"trust_remote_code": True},
+        )
+    return _embeddings
 
 
 def load_vectorstore() -> Chroma:
-    """Load an existing ChromaDB vector store."""
-    embeddings = get_embeddings()
-    return Chroma(
-        persist_directory=str(VECTORSTORE_DIR),
-        embedding_function=embeddings,
-        collection_name="docling_rag",
-    )
+    """Load or return the cached ChromaDB vector store."""
+    global _vectorstore
+    if _vectorstore is None:
+        _vectorstore = Chroma(
+            persist_directory=str(VECTORSTORE_DIR),
+            embedding_function=get_embeddings(),
+            collection_name="docling_rag",
+        )
+    return _vectorstore
 
 
 def ingest(files: list[str] | None = None) -> Chroma:

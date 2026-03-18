@@ -245,13 +245,13 @@ def get_indexed_files_table():
     return rows
 
 
-def handle_remove_sources(selected_sources: str) -> tuple[str, list]:
+def handle_remove_sources(selected_sources: list[str]) -> tuple:
     """Remove selected sources from the vectorstore."""
     global _rag_chain, _retriever
-    if not selected_sources or not selected_sources.strip():
-        return "No files selected for removal.", get_indexed_files_table()
+    if not selected_sources:
+        return "No files selected for removal.", get_indexed_files_table(), gr.CheckboxGroup(choices=list(list_indexed_sources().keys()), value=[])
 
-    names = [s.strip() for s in selected_sources.split("\n") if s.strip()]
+    names = selected_sources
     results = []
     for name in names:
         try:
@@ -265,7 +265,8 @@ def handle_remove_sources(selected_sources: str) -> tuple[str, list]:
 
     _rag_chain = None
     _retriever = None
-    return "\n".join(results), get_indexed_files_table()
+    updated_choices = list(list_indexed_sources().keys())
+    return "\n".join(results), get_indexed_files_table(), gr.CheckboxGroup(choices=updated_choices, value=[])
 
 
 def handle_ingest_selected(selected_files: list[str]) -> tuple[str, list]:
@@ -389,10 +390,9 @@ def build_ui():
                     label="Documents in Vector Store",
                 )
 
-                remove_input = gr.Textbox(
-                    label="Files to remove (one per line)",
-                    placeholder="table1.md\n12.4 - Minimization of Circuits.md",
-                    lines=4,
+                remove_picker = gr.CheckboxGroup(
+                    choices=list(list_indexed_sources().keys()),
+                    label="Select files to remove",
                 )
 
                 with gr.Row():
@@ -407,12 +407,17 @@ def build_ui():
 
                 remove_btn.click(
                     fn=handle_remove_sources,
-                    inputs=remove_input,
-                    outputs=[vs_result, indexed_table],
+                    inputs=remove_picker,
+                    outputs=[vs_result, indexed_table, remove_picker],
                 )
+
+                def refresh_vs_tab():
+                    updated_choices = list(list_indexed_sources().keys())
+                    return get_indexed_files_table(), gr.CheckboxGroup(choices=updated_choices, value=[])
+
                 vs_refresh_btn.click(
-                    fn=get_indexed_files_table,
-                    outputs=indexed_table,
+                    fn=refresh_vs_tab,
+                    outputs=[indexed_table, remove_picker],
                 )
 
                 gr.Markdown("---")
@@ -442,9 +447,21 @@ def build_ui():
                     outputs=[ingest_result, indexed_table],
                 )
                 picker_refresh_btn.click(
-                    fn=lambda: gr.update(choices=get_available_md_files()),
+                    fn=lambda: gr.CheckboxGroup(choices=get_available_md_files()),
                     outputs=md_file_picker,
                 )
+
+        # Refresh vectorstore data on every page load (not just at server start)
+        def on_page_load():
+            table = get_indexed_files_table()
+            vs_choices = list(list_indexed_sources().keys())
+            md_choices = get_available_md_files()
+            return table, gr.CheckboxGroup(choices=vs_choices, value=[]), gr.CheckboxGroup(choices=md_choices)
+
+        app.load(
+            fn=on_page_load,
+            outputs=[indexed_table, remove_picker, md_file_picker],
+        )
 
     return app
 

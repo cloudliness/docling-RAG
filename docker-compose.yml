@@ -1,0 +1,21 @@
+services:
+  docling-rag:
+    build: .
+    container_name: docling-rag
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./data/pdfs:/app/data/pdfs
+      - ./data/output:/app/data/output
+      - ./data/vectorstore:/app/data/vectorstore
+      - hf-cache:/home/appuser/.cache/huggingface
+    env_file:
+      - .env
+    environment:
+      - LMSTUDIO_BASE_URL=http://host.docker.internal:1234/v1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  hf-cache:

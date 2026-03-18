@@ -36,7 +36,7 @@ Edit `.env` to match your setup:
 LMSTUDIO_BASE_URL=http://localhost:1234/v1    # LM Studio API
 VISION_MODEL=qwen3-vl-8b                      # Model for image descriptions
 CHAT_MODEL=qwen3-vl-8b                        # Model for RAG responses
-EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+EMBEDDING_MODEL=Alibaba-NLP/gte-large-en-v1.5
 ```
 
 ## Usage
