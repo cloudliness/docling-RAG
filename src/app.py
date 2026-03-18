@@ -65,12 +65,21 @@ def chat_fn(message: dict, history: list) -> str:
         return f"Error generating response: {e}"
 
 
-def run_convert() -> str:
-    """Convert all PDFs in the input directory."""
+def run_convert(pdf_names: list[str] | None = None) -> str:
+    """Convert PDFs in the input directory.
+
+    Args:
+        pdf_names: Specific PDF filenames to convert. When *None*, convert all.
+    """
     global _last_converted_md
     _last_converted_md = []
     try:
-        pdf_files = sorted(PDF_DIR.glob("*.pdf"))
+        if pdf_names:
+            pdf_files = [PDF_DIR / name for name in pdf_names]
+            pdf_files = [p for p in pdf_files if p.exists()]
+        else:
+            pdf_files = sorted(PDF_DIR.glob("*.pdf"))
+
         pdf_count = len(pdf_files)
         if pdf_count == 0:
             return f"No PDF files found in `{PDF_DIR}`. Add PDFs and try again."
@@ -185,17 +194,26 @@ def run_pipeline_with_upload(files) -> str:
         else:
             progress = ""
 
-        # -- Step 1: Convert --
+        # -- Step 1: Convert only the uploaded files --
         progress += "Step 1 - Convert\n"
-        convert_result = run_convert()
+        convert_result = run_convert(pdf_names=saved_names if saved_names else None)
         progress += convert_result + "\n\n"
 
         if "No PDF" in convert_result:
             return progress
 
-        # -- Step 2: Ingest only the just-converted files --
+        # -- Step 2: Ingest only the just-converted files (skip already indexed) --
         progress += "Step 2 - Ingest & Index\n"
-        ingest_result = run_ingest(files=_last_converted_md if _last_converted_md else None)
+        files_to_ingest = _last_converted_md if _last_converted_md else None
+        if files_to_ingest:
+            already_indexed = set(list_indexed_sources().keys())
+            files_to_ingest = [f for f in files_to_ingest if f not in already_indexed]
+            if not files_to_ingest:
+                ingest_result = "Nothing new to ingest — all converted files are already indexed."
+            else:
+                ingest_result = run_ingest(files=files_to_ingest)
+        else:
+            ingest_result = run_ingest(files=None)
         progress += ingest_result + "\n\n"
 
         progress += "Pipeline complete."
