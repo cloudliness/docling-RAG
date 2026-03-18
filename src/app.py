@@ -218,15 +218,15 @@ def run_pipeline_with_upload(files) -> str:
 
         progress += "Pipeline complete."
         print("[pipeline] Done")
-        return progress
+        return progress, None
 
     except Exception as e:
         tb = traceback.format_exc()
         print(f"[pipeline] UNHANDLED ERROR:\n{tb}")
-        return f"Pipeline error:\n{e}\n\nCheck the terminal for details."
+        return f"Pipeline error:\n{e}\n\nCheck the terminal for details.", None
 
 
-def upload_and_run(files) -> str:
+def upload_and_run(files):
     """Upload & Ingest button handler."""
     return run_pipeline_with_upload(files)
 
@@ -278,6 +278,12 @@ def handle_remove_sources(selected_sources: list[str]) -> tuple:
                 results.append(f"Removed {removed} chunks for '{name}'")
             else:
                 results.append(f"No chunks found for '{name}'")
+
+            # Also delete the .md file from output folder
+            md_path = OUTPUT_DIR / name
+            if md_path.exists():
+                md_path.unlink()
+                results.append(f"Deleted '{name}' from output folder")
         except Exception as e:
             results.append(f"Error removing '{name}': {e}")
 
@@ -310,6 +316,17 @@ def get_available_md_files():
     """Return list of .md filenames in data/output/ for the checkbox group."""
     files = sorted(OUTPUT_DIR.glob("*.md"))
     return [f.name for f in files]
+
+
+def get_unconverted_pdfs_text():
+    """Return a markdown string listing PDFs that have no matching .md in output."""
+    pdf_files = sorted(PDF_DIR.glob("*.pdf"))
+    md_stems = {f.stem for f in OUTPUT_DIR.glob("*.md")}
+    unconverted = [p.name for p in pdf_files if p.stem not in md_stems]
+    if not unconverted:
+        return "All PDFs have been converted."
+    lines = "\n".join(f"- {name}" for name in unconverted)
+    return f"**{len(unconverted)} PDF(s) not yet converted:**\n{lines}"
 
 
 def build_ui():
@@ -370,27 +387,35 @@ def build_ui():
                     interactive=False,
                 )
 
-                upload_btn.click(fn=upload_and_run, inputs=uploader, outputs=result_display).then(
-                    fn=get_status, outputs=status_display
-                )
-
-                convert_btn.click(fn=run_convert, outputs=result_display).then(
-                    fn=get_status, outputs=status_display
-                )
-                ingest_btn.click(fn=run_ingest, outputs=result_display).then(
-                    fn=get_status, outputs=status_display
-                )
-                pipeline_btn.click(
-                    fn=run_pipeline_with_upload, inputs=uploader, outputs=result_display
-                ).then(fn=get_status, outputs=status_display)
-                refresh_btn.click(fn=get_status, outputs=status_display)
-
                 gr.Markdown(
                     f"**PDF input folder:** `{PDF_DIR}`\n\n"
                     "Upload PDFs above or drop them in the folder, then click "
                     "**Run Full Pipeline**.\n\n"
                     "*Conversion can take a while — check the terminal for live progress.*"
                 )
+
+                gr.Markdown("---")
+                gr.Markdown("### PDFs Awaiting Conversion")
+                unconverted_display = gr.Markdown(value=get_unconverted_pdfs_text)
+
+                # Wire up buttons (after all components are created)
+                def refresh_pipeline():
+                    return get_status(), get_unconverted_pdfs_text()
+
+                upload_btn.click(fn=upload_and_run, inputs=uploader, outputs=[result_display, uploader]).then(
+                    fn=refresh_pipeline, outputs=[status_display, unconverted_display]
+                )
+
+                convert_btn.click(fn=run_convert, outputs=result_display).then(
+                    fn=refresh_pipeline, outputs=[status_display, unconverted_display]
+                )
+                ingest_btn.click(fn=run_ingest, outputs=result_display).then(
+                    fn=refresh_pipeline, outputs=[status_display, unconverted_display]
+                )
+                pipeline_btn.click(
+                    fn=run_pipeline_with_upload, inputs=uploader, outputs=[result_display, uploader]
+                ).then(fn=refresh_pipeline, outputs=[status_display, unconverted_display])
+                refresh_btn.click(fn=refresh_pipeline, outputs=[status_display, unconverted_display])
 
             # Vector Store tab
             with gr.Tab("Vector Store"):
@@ -474,11 +499,12 @@ def build_ui():
             table = get_indexed_files_table()
             vs_choices = list(list_indexed_sources().keys())
             md_choices = get_available_md_files()
-            return table, gr.CheckboxGroup(choices=vs_choices, value=[]), gr.CheckboxGroup(choices=md_choices)
+            unconverted = get_unconverted_pdfs_text()
+            return table, gr.CheckboxGroup(choices=vs_choices, value=[]), gr.CheckboxGroup(choices=md_choices), unconverted
 
         app.load(
             fn=on_page_load,
-            outputs=[indexed_table, remove_picker, md_file_picker],
+            outputs=[indexed_table, remove_picker, md_file_picker, unconverted_display],
         )
 
     return app
